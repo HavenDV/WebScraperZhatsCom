@@ -172,11 +172,12 @@ namespace WebScrapper
             file.WriteLine(header);
             foreach (var team in GetTeams(fullname))
             {
-                Console.WriteLine("Start download {0} team: {1}", name, team);
                 var teamName = Path.GetFileName(team);
+                Console.WriteLine("Start download {0} team: {1}", name, teamName);
                 foreach (var item in GetItems(team))
                 {
-                    Console.WriteLine("Start download team item: {0}", item);
+                    var itemName = Path.GetFileName(item);
+                    Console.WriteLine("Start download team item: {0}", itemName);
                     try
                     {
                         DownloadPage(item, teamName, name, file);
