@@ -52,7 +52,7 @@ namespace WebScrapper
             return string.Empty;
         }
         
-        static List<string> GetImages(string data, string id)
+        static IList<string> GetImages(string data, string id)
         {
             var images = new List<string>();
             foreach (Match m in Regex.Matches(data, "//(\\S+?)\\.(jpg|png|gif|jpeg)"))
@@ -130,7 +130,7 @@ namespace WebScrapper
                 shortLink, collection );
         }
 
-        static List<string> GetTeams(string prefix)
+        static IList<string> GetTeams(string prefix)
         {
             var teams = new List<string>();
             var data = client.DownloadString("http://www.zhats.com/pages/" + prefix);
@@ -150,7 +150,7 @@ namespace WebScrapper
             return teams;
         }
 
-        static List<string> GetItems(string url)
+        static IList<string> GetItems(string url)
         {
             var items = new List<string>();
             var data = client.DownloadString(url);
@@ -163,18 +163,43 @@ namespace WebScrapper
             return items;
         }
 
+        static IList<string> GetItemsMultipage(string url)
+        {
+            var items = new List<string>();
+            IList<string> nextItems;
+            var page = 0;
+            do
+            {
+                ++page;
+                nextItems = GetItems(url + "?page=" + page);
+                items.AddRange(nextItems);
+            }
+            while (nextItems.Count > 0);
+
+            return items;
+        }
+        
+        static StreamWriter CreateImportCSVFile(string path)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            var header = "\"Item Type\",\"Product ID\",\"Product Name\",\"Product Type\",\"Product Code/SKU\",\"Bin Picking Number\",\"Brand Name\",\"Option Set\",\"Option Set Align\",\"Product Description\",\"Price\",\"Cost Price\",\"Retail Price\",\"Sale Price\",\"Fixed Shipping Cost\",\"Free Shipping\",\"Product Warranty\",\"Product Weight\",\"Product Width\",\"Product Height\",\"Product Depth\",\"Allow Purchases?\",\"Product Visible?\",\"Product Availability\",\"Track Inventory\",\"Current Stock Level\",\"Low Stock Level\",\"Category\",\"Product Image ID - 1\",\"Product Image File - 1\",\"Product Image Description - 1\",\"Product Image Is Thumbnail - 1\",\"Product Image Sort - 1\",\"Product Image ID - 2\",\"Product Image File - 2\",\"Product Image Description - 2\",\"Product Image Is Thumbnail - 2\",\"Product Image Sort - 2\",\"Product Image ID - 3\",\"Product Image File - 3\",\"Product Image Description - 3\",\"Product Image Is Thumbnail - 3\",\"Product Image Sort - 3\",\"Product Image ID - 4\",\"Product Image File - 4\",\"Product Image Description - 4\",\"Product Image Is Thumbnail - 4\",\"Product Image Sort - 4\",\"Product Image ID - 5\",\"Product Image File - 5\",\"Product Image Description - 5\",\"Product Image Is Thumbnail - 5\",\"Product Image Sort - 5\",\"Search Keywords\",\"Page Title\",\"Meta Keywords\",\"Meta Description\",\"MYOB Asset Acct\",\"MYOB Income Acct\",\"MYOB Expense Acct\",\"Product Condition\",\"Show Product Condition?\",\"Event Date Required?\",\"Event Date Name\",\"Event Date Is Limited?\",\"Event Date Start Date\",\"Event Date End Date\",\"Sort Order\",\"Product Tax Class\",\"Product UPC/EAN\",\"Stop Processing Rules\",\"Product URL\",\"Redirect Old URL?\",\"GPS Global Trade Item Number\",\"GPS Manufacturer Part Number\",\"GPS Gender\",\"GPS Age Group\",\"GPS Color\",\"GPS Size\",\"GPS Material\",\"GPS Pattern\",\"GPS Item Group ID\",\"GPS Category\",\"GPS Enabled\",\"Avalara Product Tax Code\",\"Product Custom Fields\"";
+            var file = File.CreateText(path);
+            file.WriteLine(header);
+            return file;
+        }
+
         static void LoadCategory(string name, string to, string fullname)
         {
             Console.WriteLine("Start download {0}.", name);
-            Directory.CreateDirectory(to);
-            var header = "\"Item Type\",\"Product ID\",\"Product Name\",\"Product Type\",\"Product Code/SKU\",\"Bin Picking Number\",\"Brand Name\",\"Option Set\",\"Option Set Align\",\"Product Description\",\"Price\",\"Cost Price\",\"Retail Price\",\"Sale Price\",\"Fixed Shipping Cost\",\"Free Shipping\",\"Product Warranty\",\"Product Weight\",\"Product Width\",\"Product Height\",\"Product Depth\",\"Allow Purchases?\",\"Product Visible?\",\"Product Availability\",\"Track Inventory\",\"Current Stock Level\",\"Low Stock Level\",\"Category\",\"Product Image ID - 1\",\"Product Image File - 1\",\"Product Image Description - 1\",\"Product Image Is Thumbnail - 1\",\"Product Image Sort - 1\",\"Product Image ID - 2\",\"Product Image File - 2\",\"Product Image Description - 2\",\"Product Image Is Thumbnail - 2\",\"Product Image Sort - 2\",\"Product Image ID - 3\",\"Product Image File - 3\",\"Product Image Description - 3\",\"Product Image Is Thumbnail - 3\",\"Product Image Sort - 3\",\"Product Image ID - 4\",\"Product Image File - 4\",\"Product Image Description - 4\",\"Product Image Is Thumbnail - 4\",\"Product Image Sort - 4\",\"Product Image ID - 5\",\"Product Image File - 5\",\"Product Image Description - 5\",\"Product Image Is Thumbnail - 5\",\"Product Image Sort - 5\",\"Search Keywords\",\"Page Title\",\"Meta Keywords\",\"Meta Description\",\"MYOB Asset Acct\",\"MYOB Income Acct\",\"MYOB Expense Acct\",\"Product Condition\",\"Show Product Condition?\",\"Event Date Required?\",\"Event Date Name\",\"Event Date Is Limited?\",\"Event Date Start Date\",\"Event Date End Date\",\"Sort Order\",\"Product Tax Class\",\"Product UPC/EAN\",\"Stop Processing Rules\",\"Product URL\",\"Redirect Old URL?\",\"GPS Global Trade Item Number\",\"GPS Manufacturer Part Number\",\"GPS Gender\",\"GPS Age Group\",\"GPS Color\",\"GPS Size\",\"GPS Material\",\"GPS Pattern\",\"GPS Item Group ID\",\"GPS Category\",\"GPS Enabled\",\"Avalara Product Tax Code\",\"Product Custom Fields\"";
-            var file = File.CreateText(Path.Combine(to, name + ".csv"));
-            file.WriteLine(header);
+            var file = CreateImportCSVFile(Path.Combine(to, name + ".csv"));
+            var count = 0;
             foreach (var team in GetTeams(fullname))
             {
                 var teamName = Path.GetFileName(team);
-                Console.WriteLine("Start download {0} team: {1}", name, teamName);
-                foreach (var item in GetItems(team))
+                var items = GetItemsMultipage(team);
+                Console.WriteLine("Start download {0} team: {1}. Size: {2}", name, teamName, items.Count);
+                count += items.Count;
+                foreach (var item in items)
                 {
                     var itemName = Path.GetFileName(item);
                     Console.WriteLine("Start download team item: {0}", itemName);
@@ -189,7 +214,30 @@ namespace WebScrapper
                 }
             }
             file.Close();
-            Console.WriteLine("Download ended: {0}.", name);
+            Console.WriteLine("Download ended: {0}. Downloaded {1} items.", name, count);
+        }
+
+        static void LoadCollection(string name, string to)
+        {
+            var url = "http://www.zhats.com/collections/" + name;
+            var file = CreateImportCSVFile(Path.Combine(to, name + ".csv"));
+            var items = GetItemsMultipage(url);
+            Console.WriteLine("Start download collection: {0}. Size: {1}", name, items.Count);
+            foreach (var item in items)
+            {
+                var itemName = Path.GetFileName(item);
+                Console.WriteLine("Start download team item: {0}", itemName);
+                try
+                {
+                    DownloadPage(item, "", name, file);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine("Exception: {0}", e.Message);
+                }
+            }
+            file.Close();
+            Console.WriteLine("Download ended: {0}. Downloaded {1} items.", name, items.Count);
         }
 
         static void Main(string[] args)
@@ -197,6 +245,7 @@ namespace WebScrapper
             var csvDirectory = Path.Combine("D:", "zhats.com");
             LoadCategory("NCAA", csvDirectory, "ncaateams");
             LoadCategory("NHL", csvDirectory, "nhl-teams");
+            LoadCollection("blank", csvDirectory);
             Console.ReadKey();
         }
     }
