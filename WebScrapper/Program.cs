@@ -22,7 +22,7 @@ namespace WebScrapper
     class Program
     {
         static WebClient client = new WebClient();
-        static Dictionary<string, string> itemNames = new Dictionary<string, string>();
+        static IDictionary<string, int> itemCount = new Dictionary<string, int>();
 
         static string GetName(string data)
         {
@@ -70,24 +70,24 @@ namespace WebScrapper
             return images.Distinct().ToList();
         }
 
-        static string ClearDesc(string desc)
+        public static string ToRoman(int number)
         {
-            return desc.
-                Replace("<p>", "").
-                Replace("</p>", "").
-                Replace("<span>", "").
-                Replace("</span>", "").
-                Replace("(", " ").
-                Replace(")", " ");
-        }
-
-        static string GetDiff(string s1, string s2)
-        {
-            var set1 = ClearDesc(s1).Split(' ').Distinct();
-            var set2 = ClearDesc(s2).Split(' ').Distinct();
-
-            var diff = set2.Except(set1).ToList();
-            return string.Join(" ", diff);
+            if ((number < 0) || (number > 3999)) throw new ArgumentOutOfRangeException("insert value betwheen 1 and 3999");
+            if (number < 1) return string.Empty;
+            if (number >= 1000) return "M" + ToRoman(number - 1000);
+            if (number >= 900) return "CM" + ToRoman(number - 900);
+            if (number >= 500) return "D" + ToRoman(number - 500);
+            if (number >= 400) return "CD" + ToRoman(number - 400);
+            if (number >= 100) return "C" + ToRoman(number - 100);
+            if (number >= 90) return "XC" + ToRoman(number - 90);
+            if (number >= 50) return "L" + ToRoman(number - 50);
+            if (number >= 40) return "XL" + ToRoman(number - 40);
+            if (number >= 10) return "X" + ToRoman(number - 10);
+            if (number >= 9) return "IX" + ToRoman(number - 9);
+            if (number >= 5) return "V" + ToRoman(number - 5);
+            if (number >= 4) return "IV" + ToRoman(number - 4);
+            if (number >= 1) return "I" + ToRoman(number - 1);
+            throw new ArgumentOutOfRangeException("something bad happened");
         }
 
         static void DownloadPage(string url, string team, string collection, StreamWriter csv)
@@ -104,22 +104,18 @@ namespace WebScrapper
 
             var images = GetImages(data, id);
 
-            //Fix duplicates
-            if (itemNames.ContainsKey(name))
+            //Fix duplicates roman number method
+            if (itemCount.ContainsKey(name))
             {
-                var diff = GetDiff(itemNames[name], desc);
-                if (!string.IsNullOrEmpty(diff))
-                {
-                    name += " " + diff;
-                }
+                itemCount[name] = itemCount[name] + 1;
+                name += " " + ToRoman(itemCount[name]);
             }
             else
             {
-                itemNames.Add(name, desc);
+                itemCount.Add(name, 1);
             }
 
-            var shortLink = name.ToLowerInvariant().Replace(' ', '-');
-            var template = "Product,,\"{0}\",P,,,,,Right,\"<p><span>{1}</span></p>\",{2},0.00,0.00,0.00,0.00,N,,16.0000,0.0000,0.0000,0.0000,Y,Y,,none,0,0,\"Shop/Caps \\/ Hats/{10}/{3}\",,{4},,Y,0,,{5},,,,,{6},,,,,{7},,,,,{8},,,,,,,,,,,New,N,N,\"Delivery Date\",N,,,0,\"Non - Taxable Products\",,N,/{9}/,,,,,,,,,,,,N,,";
+            var template = "Product,,\"{0}\",P,,,,,Right,\"<p><span>{1}</span></p>\",{2},0.00,0.00,0.00,0.00,N,,16.0000,0.0000,0.0000,0.0000,Y,Y,,none,0,0,\"Shop/Caps \\/ Hats/{9}/{3}\",,{4},,Y,0,,{5},,,,,{6},,,,,{7},,,,,{8},,,,,,,,,,,New,N,N,\"Delivery Date\",N,,,0,\"Non - Taxable Products\",,N,,,,,,,,,,,,,N,,";
             csv.WriteLine(template,
                 name, desc.Trim(' ', '\n', '\r').Replace("\r","").Replace("\n",""), price, team.Replace('-',' '), 
                 images.Count > 0 ? images[ 0 ] : "", 
@@ -127,7 +123,7 @@ namespace WebScrapper
                 images.Count > 2 ? images[ 2 ] : "",
                 images.Count > 3 ? images[ 3 ] : "",
                 images.Count > 4 ? images[ 4 ] : "",
-                shortLink, collection );
+                collection );
         }
 
         static IList<string> GetTeams(string prefix)
