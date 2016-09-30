@@ -21,7 +21,6 @@ namespace WebScrapper
 
     class Program
     {
-        static WebClient client = new WebClient();
         static IDictionary<string, int> itemCount = new Dictionary<string, int>();
 
         static string GetName(string data)
@@ -142,7 +141,6 @@ namespace WebScrapper
                 itemCount.Add(name, 1);
             }
 
-            string output = string.Empty;
             var template = "Product,,\"{0}\",P,,,,,Right,\"<p><span>{1}</span></p>\",{2},0.00,0.00,0.00,0.00,N,,16.0000,0.0000,0.0000,0.0000,Y,Y,,none,0,0,\"Shop/Caps \\/ Hats/{9}/{3}\",,{4},,Y,0,,{5},,,,,{6},,,,,{7},,,,,{8},,,,,,,,,,,New,N,N,\"Delivery Date\",N,,,0,\"Non - Taxable Products\",,N,,,,,,,,,,,,,N,,";
             return string.Format(template,
                 name, desc.Trim(' ', '\n', '\r').Replace("\r","").Replace("\n",""), price, team.Replace('-',' '), 
@@ -153,38 +151,11 @@ namespace WebScrapper
                 images.Count > 4 ? images[ 4 ] : "",
                 collection );
         }
-
-        public class Downloader
-        {
-            private string _url;
-            private string _team;
-            private string _collection;
-            private ManualResetEvent _doneEvent;
-
-            public string csvString { get; private set; }
-
-            public Downloader(string url, string team, string collection, ManualResetEvent doneEvent)
-            {
-                _url = url;
-                _team = team;
-                _collection = collection;
-                _doneEvent = doneEvent;
-            }
-
-            // Wrapper method for use with thread pool.
-            public void ThreadPoolCallback(object threadContext)
-            {
-                var itemName = Path.GetFileName(_url);
-                Console.WriteLine("Start download team item: {0}", itemName);
-                csvString = DownloadPage(_url, _team, _collection);
-                _doneEvent.Set();
-            }
-        }
-
+        
         static IList<string> GetTeams(string prefix)
         {
             var teams = new List<string>();
-            var data = client.DownloadString("http://www.zhats.com/pages/" + prefix);
+            var data = new WebClient().DownloadString("http://www.zhats.com/pages/" + prefix);
 
             foreach (Match match in Regex.Matches(data, "<li><a href=\\\"(http://zhats(.+))\\\">(.+)<\\/a><\\/li>"))
             {
@@ -204,7 +175,7 @@ namespace WebScrapper
         static IList<string> GetItems(string url)
         {
             var items = new List<string>();
-            var data = client.DownloadString(url);
+            var data = new WebClient().DownloadString(url);
 
             foreach (Match match in Regex.Matches(data, "<div class=\\\"product-details\\\">((.|\\n)+?)<a href=\\\"(.+)\\\">"))
             {
@@ -239,67 +210,32 @@ namespace WebScrapper
             return file;
         }
 
-        static string DownloadItems(IList<string> items, string teamName, string collectionName)
+        static async Task<string> DownloadItemsAsync(IList<string> items, string teamName, string collectionName)
         {
-            if (items.Count < 1)
+            Console.WriteLine("Start download {0} team: {1}. Size: {2}", collectionName, teamName, items.Count);
+            return string.Join("\n", await Task.WhenAll(items.Select(item => Task.Run(() => DownloadPage(item, teamName, collectionName)))));
+        }
+
+        static async Task<string> DownloadTeamsAsync(IList<string> teams, string collectionName)
+        {
+            Console.WriteLine("Start download collection: {0}.", collectionName);
+            var count = 0;
+            var strings = await Task.WhenAll(teams.Select(team => Task.Run(() =>
             {
-                return string.Empty;
-            }
-
-            if (items.Count > 64)
-            {
-                var text = string.Empty;
-                var chunkLength = (int)Math.Ceiling(items.Count() / 64.0);
-                var parts = Enumerable.Range(0, 64)
-                                      .Select(i => items.Skip(i * chunkLength).Take(chunkLength));
-                foreach (var part in parts)
-                {
-                    text += DownloadItems(part.ToList(), teamName, collectionName);
-                }
-                return text;
-            }
-
-            // One event is used for each Downloader object.
-            var doneEvents = new List<ManualResetEvent>();
-            var downloaders = new List<Downloader>();
-
-            // Configure and start threads using ThreadPool.
-            for (int i = 0; i < items.Count; i++)
-            {
-                var doneEvent = new ManualResetEvent(false);
-                doneEvents.Add(doneEvent);
-                var downloader = new Downloader(items[i], teamName, collectionName, doneEvent);
-                downloaders.Add(downloader);
-                ThreadPool.QueueUserWorkItem(downloader.ThreadPoolCallback, i);
-            }
-
-            // Wait for all threads in pool to calculate.
-            WaitHandle.WaitAll(doneEvents.ToArray());
-
-            // Prepare the results.
-            var output = string.Empty;
-            foreach (var downloader in downloaders)
-            {
-                output += downloader.csvString + Environment.NewLine;
-            }
-            return output;
+                var teamName = Path.GetFileName(team);
+                var items = GetItemsMultipage(team);
+                count += items.Count;
+                return DownloadItemsAsync(items, teamName, collectionName);
+            })));
+            Console.WriteLine("Download ended: {0}. Downloaded {1} items.", collectionName, count);
+            return string.Join("\n", strings);
         }
 
         static void LoadCategory(string name, string to, string fullname)
         {
-            Console.WriteLine("Start download {0}.", name);
             var file = CreateImportCSVFile(Path.Combine(to, name + ".csv"));
-            var count = 0;
-            foreach (var team in GetTeams(fullname))
-            {
-                var teamName = Path.GetFileName(team);
-                var items = GetItemsMultipage(team);
-                Console.WriteLine("Start download {0} team: {1}. Size: {2}", name, teamName, items.Count);
-                count += items.Count;
-                file.Write( DownloadItems(items, teamName, name) );
-            }
+            file.Write(DownloadTeamsAsync(GetTeams(fullname), name).Result);
             file.Close();
-            Console.WriteLine("Download ended: {0}. Downloaded {1} items.", name, count);
         }
 
         static void LoadCollection(string name, string to)
@@ -308,17 +244,37 @@ namespace WebScrapper
             var file = CreateImportCSVFile(Path.Combine(to, name + ".csv"));
             var items = GetItemsMultipage(url);
             Console.WriteLine("Start download collection: {0}. Size: {1}", name, items.Count);
-            file.Write(DownloadItems(items, "", name));
+            file.Write(DownloadItemsAsync(items, "", name));
             file.Close();
             Console.WriteLine("Download ended: {0}. Downloaded {1} items.", name, items.Count);
         }
 
         static void Main(string[] args)
         {
-            var csvDirectory = Path.Combine("D:", "zhats.com");
-            LoadCategory("NCAA", csvDirectory, "ncaateams");
-            LoadCategory("NHL", csvDirectory, "nhl-teams");
-            LoadCollection("blank", csvDirectory);
+            try
+            {
+                var csvDirectory = Path.Combine("D:", "zhats.com");
+                Console.WriteLine("Download started.");
+                LoadCategory("NCAA", csvDirectory, "ncaateams");
+                LoadCategory("NHL", csvDirectory, "nhl-teams");
+                LoadCollection("blank", csvDirectory);
+                LoadCollection("colorado-flag", csvDirectory);
+                LoadCollection("country", csvDirectory);
+                LoadCollection("state", csvDirectory);
+                LoadCollection("dad-hats", csvDirectory);
+                LoadCollection("knits", csvDirectory);
+                LoadCollection("youth", csvDirectory);
+                LoadCollection("lacer", csvDirectory);
+                LoadCollection("toa", csvDirectory);
+                LoadCollection("original-six-1", csvDirectory);
+                LoadCollection("zephyr-brand", csvDirectory);
+                LoadCollection("powwow", csvDirectory);
+                Console.WriteLine("Download ended.");
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine("Exception: {0}", e.Message);
+            }
             Console.ReadKey();
         }
     }
