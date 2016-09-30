@@ -249,26 +249,51 @@ namespace WebScrapper
             Console.WriteLine("Download ended: {0}. Downloaded {1} items.", name, items.Count);
         }
 
+        static void DisplayHelp()
+        {
+            Console.WriteLine(@"
+Web Scraper For zhats.com v1.0.0  released: September 29, 2016
+Copyright (C) 2016 Konstantin S.
+https://www.upwork.com/fl/havendv
+
+Usage:
+    webscraper.exe <pathtooutputdir>
+    - pathtooutputdir - Directory for save output csv files. Example: C:\\zhats.com\\
+
+");
+        }
+        private static bool HelpRequired(string param)
+        {
+            return param == "-h" || param == "--help" || param == "/?";
+        }
+
         static void Main(string[] args)
         {
             try
             {
-                var csvDirectory = Path.Combine("D:", "zhats.com");
+                if (args.Length < 1 || HelpRequired(args[0]))
+                {
+                    DisplayHelp();
+                    Console.ReadKey();
+                    return;
+                }
+
+                var outputDir = args[0];
                 Console.WriteLine("Download started.");
-                LoadCategory("NCAA", csvDirectory, "ncaateams");
-                LoadCategory("NHL", csvDirectory, "nhl-teams");
-                LoadCollection("blank", csvDirectory);
-                LoadCollection("colorado-flag", csvDirectory);
-                LoadCollection("country", csvDirectory);
-                LoadCollection("state", csvDirectory);
-                LoadCollection("dad-hats", csvDirectory);
-                LoadCollection("knits", csvDirectory);
-                LoadCollection("youth", csvDirectory);
-                LoadCollection("lacer", csvDirectory);
-                LoadCollection("toa", csvDirectory);
-                LoadCollection("original-six-1", csvDirectory);
-                LoadCollection("zephyr-brand", csvDirectory);
-                LoadCollection("powwow", csvDirectory);
+                LoadCategory("NCAA", outputDir, "ncaateams");
+                LoadCategory("NHL", outputDir, "nhl-teams");
+                LoadCollection("blank", outputDir);
+                LoadCollection("colorado-flag", outputDir);
+                LoadCollection("country", outputDir);
+                LoadCollection("state", outputDir);
+                LoadCollection("dad-hats", outputDir);
+                LoadCollection("knits", outputDir);
+                LoadCollection("youth", outputDir);
+                LoadCollection("lacer", outputDir);
+                LoadCollection("toa", outputDir);
+                LoadCollection("original-six-1", outputDir);
+                LoadCollection("zephyr-brand", outputDir);
+                LoadCollection("powwow", outputDir);
                 Console.WriteLine("Download ended.");
             }
             catch(Exception e)
