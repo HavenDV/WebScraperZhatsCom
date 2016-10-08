@@ -9,7 +9,7 @@ using System.IO;
 using System.Threading;
 using System.Globalization;
 
-namespace WebScrapper
+namespace WebScraper
 {
     public static class StringExtensions
     {
