@@ -22,6 +22,8 @@ namespace WebScrapper
     class Program
     {
         static IDictionary<string, int> itemCount = new Dictionary<string, int>();
+        static int acu = 0;
+        private static object _lock = new object();
 
         static string GetName(string data)
         {
@@ -140,16 +142,15 @@ namespace WebScrapper
             {
                 itemCount.Add(name, 1);
             }
-
-            var template = "Product,,\"{0}\",P,,,,,Right,\"<p><span>{1}</span></p>\",{2},0.00,0.00,0.00,0.00,N,,16.0000,0.0000,0.0000,0.0000,Y,Y,,none,0,0,\"Shop/Caps \\/ Hats/{9}/{3}\",,{4},,Y,0,,{5},,,,,{6},,,,,{7},,,,,{8},,,,,,,,,,,New,N,N,\"Delivery Date\",N,,,0,\"Non - Taxable Products\",,N,,,,,,,,,,,,,N,,";
-            return string.Format(template,
-                name, desc.Trim(' ', '\n', '\r').Replace("\r","").Replace("\n",""), price, team.Replace('-',' '), 
-                images.Count > 0 ? images[ 0 ] : "", 
-                images.Count > 1 ? images[ 1 ] : "", 
-                images.Count > 2 ? images[ 2 ] : "",
-                images.Count > 3 ? images[ 3 ] : "",
-                images.Count > 4 ? images[ 4 ] : "",
-                collection );
+            var template = "Product,,\"{0}\",P,ZEP{10},,Zephyr,,Right,\"<p><span>{1}</span></p>\",{2},0.00,0.00,0.00,0.00,N,,16.0000,0.0000,0.0000,0.0000,Y,Y,,none,0,0,\"Shop/Caps \\/ Hats/{9}/{3}\",,{4},,Y,0,,{5},,,,,{6},,,,,{7},,,,,{8},,,,,,,,,,,New,N,N,\"Delivery Date\",N,,,0,\"Non - Taxable Products\",,N,,,,,,,,,,,,,N,,";
+            lock (_lock) return string.Format(template,
+                    name, desc.Trim(' ', '\n', '\r').Replace("\r","").Replace("\n",""), price, team.Replace('-',' '), 
+                    images.Count > 0 ? images[ 0 ] : "", 
+                    images.Count > 1 ? images[ 1 ] : "", 
+                    images.Count > 2 ? images[ 2 ] : "",
+                    images.Count > 3 ? images[ 3 ] : "",
+                    images.Count > 4 ? images[ 4 ] : "",
+                    collection, ++acu);
         }
         
         static IList<string> GetTeams(string prefix)
@@ -227,6 +228,7 @@ namespace WebScrapper
                 count += items.Count;
                 return DownloadItemsAsync(items, teamName, collectionName);
             })));
+            strings = strings.Where(x => !string.IsNullOrEmpty(x)).ToArray();
             Console.WriteLine("Download ended: {0}. Downloaded {1} items.", collectionName, count);
             return string.Join("\n", strings);
         }
@@ -244,7 +246,7 @@ namespace WebScrapper
             var file = CreateImportCSVFile(Path.Combine(to, name + ".csv"));
             var items = GetItemsMultipage(url);
             Console.WriteLine("Start download collection: {0}. Size: {1}", name, items.Count);
-            file.Write(DownloadItemsAsync(items, "", name));
+            file.Write(DownloadItemsAsync(items, "", name).Result);
             file.Close();
             Console.WriteLine("Download ended: {0}. Downloaded {1} items.", name, items.Count);
         }
